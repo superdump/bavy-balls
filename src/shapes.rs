@@ -171,12 +171,14 @@ impl From<HalfCylinderPath> for Mesh {
             yaw_range,
             pitch_range,
         };
+        let mut prev_forward = forward;
         for rotation in worm_path_iter.take(n_segments + 1) {
             let forward = rotation * forward;
-            let right = up.cross(-forward).normalize_or_zero() * radius;
+            let forward_avg = (prev_forward + forward).normalize_or_zero();
+            let right = up.cross(-forward_avg).normalize_or_zero() * radius;
             for i in 0..=subdivisions {
                 let offset = Quat::from_axis_angle(
-                    forward,
+                    forward_avg,
                     std::f32::consts::PI * i as f32 / subdivisions as f32,
                 ) * right;
                 let normal = (-offset.normalize_or_zero()).to_array();
@@ -185,6 +187,7 @@ impl From<HalfCylinderPath> for Mesh {
                 uvs.push([0.0, 0.0]);
             }
             position += forward * segment_length;
+            prev_forward = forward;
         }
 
         let mut indices = Vec::with_capacity(n_segments * subdivisions * 6);
