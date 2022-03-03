@@ -1,5 +1,5 @@
 use bavy_balls::shapes::{mesh_to_collider_shape, HalfCylinderPath};
-use bevy::{input::system::exit_on_esc_system, prelude::*};
+use bevy::{input::system::exit_on_esc_system, prelude::*, render::primitives::Aabb};
 use bevy_rapier3d::{
     na::{Isometry3, Vector3},
     physics::TimestepMode,
@@ -118,9 +118,12 @@ fn spawn_halfpipe_segment(
                     shape: collider_shape.into(),
                     ..Default::default()
                 })
-                .insert(ColliderPositionSync::Discrete);
+                .insert_bundle((ColliderPositionSync::Discrete, Track));
         });
 }
+
+#[derive(Component)]
+struct Track;
 
 #[derive(Default)]
 struct Prng {
@@ -235,9 +238,19 @@ fn spawn_ball(
 
 const MIN_Y: f32 = -1000.0;
 
-fn despawn_balls(mut commands: Commands, balls: Query<(Entity, &Transform), With<Ball>>) {
+fn despawn_balls(
+    mut commands: Commands,
+    track: Query<&Aabb, With<Track>>,
+    balls: Query<(Entity, &Transform), With<Ball>>,
+    mut min: Local<Option<f32>>,
+) {
+    *min = track
+        .iter()
+        .next()
+        .map_or(Some(MIN_Y), |aabb| Some(aabb.min().y));
+    let min = min.unwrap();
     for (ball, transform) in balls.iter() {
-        if transform.translation.y < MIN_Y {
+        if transform.translation.y < min {
             commands.entity(ball).despawn_recursive();
         }
     }
