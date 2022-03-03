@@ -62,7 +62,9 @@ fn setup_level(
     let half_cylinder_collider = mesh_to_collider_shape(&half_cylinder_mesh)
         .expect("Failed to convert half cylinder mesh to collider");
     let half_cylinder_handle = meshes.add(half_cylinder_mesh);
-    let half_cylinder_material = materials.add(StandardMaterial::from(Color::WHITE));
+    let mut half_cylinder_material = StandardMaterial::from(Color::DARK_GRAY);
+    half_cylinder_material.perceptual_roughness = 0.5;
+    let half_cylinder_material = materials.add(half_cylinder_material);
 
     spawn_halfpipe_segment(
         &mut commands,
@@ -207,6 +209,7 @@ fn spawn_ball(
                     material: materials.add(StandardMaterial {
                         base_color: ball_color,
                         emissive: ball_color,
+                        perceptual_roughness: 0.9,
                         ..Default::default()
                     }),
                     ..Default::default()
