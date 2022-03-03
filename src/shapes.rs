@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use bevy::{
     math::{const_vec3, Quat, Vec3},
     prelude::Mesh,
@@ -7,12 +9,15 @@ use bevy::{
     },
 };
 use bevy_rapier3d::{na::Point3, prelude::ColliderShape};
+use rand::{prelude::SmallRng, SeedableRng};
+
+use crate::paths::WormPathIterator;
 
 pub struct HalfCylinder {
-    start: Vec3,
-    end: Vec3,
-    radius: f32,
-    subdivisions: usize,
+    pub start: Vec3,
+    pub end: Vec3,
+    pub radius: f32,
+    pub subdivisions: usize,
 }
 
 const START: Vec3 = const_vec3!([0.0, 0.0, -0.5]);
@@ -87,6 +92,116 @@ impl From<HalfCylinder> for Mesh {
                 offset + 3,
                 offset + 2,
             ]);
+        }
+        let indices = Indices::U32(indices);
+
+        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+        mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+        mesh.set_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+        mesh.set_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+        mesh.set_indices(Some(indices));
+        mesh
+    }
+}
+
+pub struct HalfCylinderPath {
+    pub start: Vec3,
+    pub forward: Vec3,
+    pub radius: f32,
+    pub segment_length: f32,
+    pub n_segments: usize,
+    pub subdivisions: usize,
+    pub seed: u64,
+    pub yaw_range: Range<f32>,
+    pub pitch_range: Range<f32>,
+}
+
+const NEGATIVE_Z: Vec3 = const_vec3!([0.0, 0.0, -1.0]);
+
+const YAW_RANGE: Range<f32> =
+    (-0.9 * std::f32::consts::FRAC_PI_2)..(0.9 * std::f32::consts::FRAC_PI_2);
+const PITCH_RANGE: Range<f32> =
+    (-0.9 * std::f32::consts::FRAC_PI_2)..(-0.1 * std::f32::consts::FRAC_PI_2);
+
+impl HalfCylinderPath {
+    pub const fn new() -> Self {
+        Self {
+            start: Vec3::ZERO,
+            forward: NEGATIVE_Z,
+            radius: 0.5,
+            segment_length: 1.0,
+            n_segments: 100,
+            subdivisions: 10,
+            seed: 1234,
+            yaw_range: YAW_RANGE,
+            pitch_range: PITCH_RANGE,
+        }
+    }
+}
+
+impl Default for HalfCylinderPath {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl From<HalfCylinderPath> for Mesh {
+    fn from(shape: HalfCylinderPath) -> Self {
+        let HalfCylinderPath {
+            start,
+            forward,
+            radius,
+            segment_length,
+            n_segments,
+            subdivisions,
+            seed,
+            yaw_range,
+            pitch_range,
+        } = shape;
+        let vertex_count = (subdivisions + 1) * (n_segments + 1);
+
+        let mut positions = Vec::with_capacity(vertex_count);
+        let mut normals = Vec::with_capacity(vertex_count);
+        let mut uvs = Vec::with_capacity(vertex_count);
+
+        let up = Vec3::Y;
+        let mut position = start;
+        let worm_path_iter = WormPathIterator {
+            rng: SmallRng::seed_from_u64(seed),
+            yaw_range,
+            pitch_range,
+        };
+        for rotation in worm_path_iter.take(n_segments + 1) {
+            let forward = rotation * forward;
+            let right = up.cross(-forward).normalize_or_zero() * radius;
+            for i in 0..=subdivisions {
+                let offset = Quat::from_axis_angle(
+                    forward,
+                    std::f32::consts::PI * i as f32 / subdivisions as f32,
+                ) * right;
+                let normal = (-offset.normalize_or_zero()).to_array();
+                positions.push((position + offset).to_array());
+                normals.push(normal);
+                uvs.push([0.0, 0.0]);
+            }
+            position += forward * segment_length;
+        }
+
+        let mut indices = Vec::with_capacity(n_segments * subdivisions * 6);
+        let segment_vertex_count = subdivisions as u32 + 1;
+        for i in 0..n_segments as u32 {
+            let segment_offset = segment_vertex_count * i;
+            for j in 0..subdivisions as u32 {
+                let offset = segment_offset + j;
+                indices.extend_from_slice(&[
+                    offset + 1,
+                    offset,
+                    offset + segment_vertex_count,
+                    offset + segment_vertex_count,
+                    offset + segment_vertex_count + 1,
+                    offset + 1,
+                ]);
+            }
         }
         let indices = Indices::U32(indices);
 

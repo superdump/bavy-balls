@@ -1,4 +1,4 @@
-use bavy_balls::shapes::{mesh_to_collider_shape, HalfCylinder};
+use bavy_balls::shapes::{mesh_to_collider_shape, HalfCylinderPath};
 use bevy::{input::system::exit_on_esc_system, prelude::*};
 use bevy_rapier3d::{
     na::{Isometry3, Vector3},
@@ -39,20 +39,58 @@ fn main() {
     app.run();
 }
 
+const SPAWN_POSITION: Vec3 = Vec3::ZERO;
+const SPAWN_RADIUS: f32 = 25.0;
+
 fn setup_level(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let half_cylinder_mesh = Mesh::from(HalfCylinder::from_radius_and_length(25.0, 100.0));
+    let half_cylinder_mesh = Mesh::from(HalfCylinderPath {
+        start: SPAWN_POSITION,
+        radius: SPAWN_RADIUS,
+        segment_length: 100.0,
+        n_segments: 100,
+        seed: 4321,
+        yaw_range: (-std::f32::consts::FRAC_PI_4)..std::f32::consts::FRAC_PI_4,
+        pitch_range: (-std::f32::consts::FRAC_PI_4)..(-0.1 * std::f32::consts::FRAC_PI_4),
+        ..Default::default()
+    });
     let half_cylinder_collider = mesh_to_collider_shape(&half_cylinder_mesh)
         .expect("Failed to convert half cylinder mesh to collider");
     let half_cylinder_handle = meshes.add(half_cylinder_mesh);
+    let half_cylinder_material = materials.add(StandardMaterial::from(Color::WHITE));
 
-    // Ground
+    spawn_halfpipe_segment(
+        &mut commands,
+        half_cylinder_handle,
+        half_cylinder_material,
+        half_cylinder_collider,
+        Vec3::ZERO,
+        Quat::IDENTITY,
+    );
+
+    commands.spawn_bundle(FpsCameraBundle::new(
+        FpsCameraController::default(),
+        PerspectiveCameraBundle::default(),
+        SPAWN_POSITION + Vec3::new(0.0, 1.0, 1.0),
+        SPAWN_POSITION,
+    ));
+}
+
+fn spawn_halfpipe_segment(
+    commands: &mut Commands,
+    mesh: Handle<Mesh>,
+    material: Handle<StandardMaterial>,
+    collider_shape: ColliderShape,
+    translation: Vec3,
+    rotation: Quat,
+) {
+    let (axis, angle) = rotation.to_axis_angle();
     let position = Isometry3::new(
-        Vector3::new(0.0, 0.0, 0.0),
-        Vector3::x() * 30.0f32.to_radians(),
+        Vector3::new(translation.x, translation.y, translation.z),
+        Vector3::new(axis.x, axis.y, axis.z) * angle,
     );
     commands
         .spawn_bundle(RigidBodyBundle {
@@ -68,23 +106,16 @@ fn setup_level(
         .with_children(|builder| {
             builder
                 .spawn_bundle(PbrBundle {
-                    mesh: half_cylinder_handle,
-                    material: materials.add(StandardMaterial::from(Color::WHITE)),
+                    mesh,
+                    material,
                     ..Default::default()
                 })
                 .insert_bundle(ColliderBundle {
-                    shape: half_cylinder_collider.into(),
+                    shape: collider_shape.into(),
                     ..Default::default()
                 })
                 .insert(ColliderPositionSync::Discrete);
         });
-
-    commands.spawn_bundle(FpsCameraBundle::new(
-        FpsCameraController::default(),
-        PerspectiveCameraBundle::default(),
-        Vec3::new(0.0, 100.0, 100.0),
-        Vec3::ZERO,
-    ));
 }
 
 #[derive(Default)]
@@ -121,10 +152,14 @@ fn spawn_balls(
             rng.rng = Some(SmallRng::seed_from_u64(1234));
         }
         let rng = rng.rng.as_mut().unwrap();
-        for _ in 0..N_PLAYERS {
+        for i in 0..N_PLAYERS {
             let spawn_time = t + rng.gen_range(0.0..10.0);
-            let spawn_point = Vec3::new(rng.gen_range(-50.0..50.0), 100.0, -30.0);
-            let ball_color = Color::rgb(rng.gen(), rng.gen(), rng.gen());
+            let spawn_point = Vec3::new(
+                rng.gen_range((-0.9 * SPAWN_RADIUS + 1.0)..(0.9 * SPAWN_RADIUS - 1.0)),
+                0.0,
+                -1.0,
+            );
+            let ball_color = Color::hsl(360.0 * (i as f32) / (N_PLAYERS as f32), 1.0, 0.5);
             to_spawn.balls.push((spawn_time, spawn_point, ball_color));
         }
     }
@@ -166,7 +201,7 @@ fn spawn_ball(
                     })),
                     material: materials.add(StandardMaterial {
                         base_color: ball_color,
-                        emissive: ball_color * 10.0,
+                        emissive: ball_color,
                         ..Default::default()
                     }),
                     ..Default::default()
@@ -190,7 +225,7 @@ fn spawn_ball(
         });
 }
 
-const MIN_Y: f32 = -100.0;
+const MIN_Y: f32 = -1000.0;
 
 fn despawn_balls(mut commands: Commands, balls: Query<(Entity, &Transform), With<Ball>>) {
     for (ball, transform) in balls.iter() {
