@@ -189,6 +189,11 @@ fn spawn_ball(
         .spawn_bundle(RigidBodyBundle {
             body_type: RigidBodyType::Dynamic.into(),
             position: spawn_point.into(),
+            velocity: RigidBodyVelocity {
+                linvel: -1.0f32 * Vector3::z(),
+                ..Default::default()
+            }
+            .into(),
             ccd: RigidBodyCcd {
                 ccd_enabled: true,
                 ..Default::default()
