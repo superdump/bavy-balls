@@ -140,7 +140,6 @@ fn spawn_balls(
     mut commands: Commands,
     meshes: ResMut<Assets<Mesh>>,
     materials: ResMut<Assets<StandardMaterial>>,
-    keyboard_input: Res<Input<KeyCode>>,
     mut rng: Local<Prng>,
     mut to_spawn: Local<BallsToSpawn>,
     time: Res<Time>,
@@ -148,8 +147,7 @@ fn spawn_balls(
 ) {
     let t = time.seconds_since_startup();
     let ball_count = balls.iter().count();
-    if (ball_count == 0 && to_spawn.balls.is_empty()) || keyboard_input.just_pressed(KeyCode::Space)
-    {
+    if ball_count == 0 && to_spawn.balls.is_empty() {
         if rng.rng.is_none() {
             rng.rng = Some(SmallRng::seed_from_u64(1234));
         }
