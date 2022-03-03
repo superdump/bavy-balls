@@ -1,5 +1,5 @@
 use bevy::{
-    math::{Quat, Vec3},
+    math::{const_vec3, Quat, Vec3},
     prelude::Mesh,
     render::{mesh::Indices, render_resource::PrimitiveTopology},
 };
@@ -11,14 +11,31 @@ pub struct HalfCylinder {
     subdivisions: usize,
 }
 
-impl Default for HalfCylinder {
-    fn default() -> Self {
+const START: Vec3 = const_vec3!([0.0, 0.0, -0.5]);
+const END: Vec3 = const_vec3!([0.0, 0.0, 0.5]);
+
+impl HalfCylinder {
+    pub const fn new() -> Self {
         Self {
-            start: -0.5 * Vec3::Z,
-            end: 0.5 * Vec3::Z,
+            start: START,
+            end: END,
             radius: 0.5,
             subdivisions: 10,
         }
+    }
+
+    pub fn from_scale(scale: f32) -> Self {
+        let mut half_cylinder = Self::default();
+        half_cylinder.start *= scale;
+        half_cylinder.end *= scale;
+        half_cylinder.radius *= scale;
+        half_cylinder
+    }
+}
+
+impl Default for HalfCylinder {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
