@@ -9,7 +9,7 @@ use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use smooth_bevy_cameras::{
     controllers::fps::{FpsCameraBundle, FpsCameraController, FpsCameraPlugin},
-    LookTransformPlugin,
+    LookTransform, LookTransformPlugin, Smoother,
 };
 
 fn main() {
@@ -33,6 +33,8 @@ fn main() {
     .add_plugin(FpsCameraPlugin::default())
     .add_system(exit_on_esc_system)
     .add_startup_system(setup_level)
+    .init_resource::<FollowMode>()
+    .add_system(follow_ball)
     .add_system(spawn_balls)
     .add_system(despawn_balls);
 
@@ -191,7 +193,12 @@ fn spawn_ball(
             .into(),
             ..Default::default()
         })
-        .insert_bundle((Ball, RigidBodyPositionSync::Discrete))
+        .insert_bundle((
+            Ball,
+            RigidBodyPositionSync::Discrete,
+            Transform::from_translation(spawn_point),
+            GlobalTransform::from_translation(spawn_point),
+        ))
         .with_children(|builder| {
             builder
                 .spawn_bundle(PbrBundle {
@@ -232,5 +239,49 @@ fn despawn_balls(mut commands: Commands, balls: Query<(Entity, &Transform), With
         if transform.translation.y < MIN_Y {
             commands.entity(ball).despawn_recursive();
         }
+    }
+}
+
+#[derive(Default)]
+struct FollowMode {
+    target: Option<Entity>,
+}
+
+fn follow_ball(
+    keyboard_input: Res<Input<KeyCode>>,
+    mut follow_mode: ResMut<FollowMode>,
+    balls: Query<(Entity, &GlobalTransform, &RigidBodyVelocityComponent), With<Ball>>,
+    mut cameras: Query<(&FpsCameraController, &mut LookTransform, &mut Smoother)>,
+) {
+    let (controller, mut look_transform, mut smoother) = cameras.single_mut();
+    let n_balls = balls.iter().count();
+    if keyboard_input.just_pressed(KeyCode::F) {
+        follow_mode.target = match follow_mode.target {
+            Some(_) => {
+                smoother.set_lag_weight(controller.smoothing_weight);
+                None
+            }
+            None => {
+                smoother.set_lag_weight(0.99);
+                Some(balls.iter().nth(n_balls / 2).unwrap().0)
+            }
+        };
+    }
+    let mut new_ball = None;
+    if let Some(ball) = follow_mode.target {
+        if let Some((_, transform, velocity)) = balls.get(ball).ok().or_else(|| {
+            new_ball = balls.iter().nth(n_balls / 2);
+            new_ball
+        }) {
+            let linvel = Vec3::from_slice(velocity.linvel.as_slice()).normalize_or_zero();
+            let right = linvel.cross(Vec3::Y);
+            let up = right.cross(linvel);
+            let offset = 100.0 * ((up - linvel) + 0.02 * Vec3::ONE);
+            look_transform.target = transform.translation;
+            look_transform.eye = transform.translation + offset;
+        }
+    }
+    if let Some((new_ball, ..)) = new_ball {
+        follow_mode.target = Some(new_ball);
     }
 }
