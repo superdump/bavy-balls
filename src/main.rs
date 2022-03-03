@@ -42,7 +42,7 @@ fn main() {
 }
 
 const SPAWN_POSITION: Vec3 = Vec3::ZERO;
-const SPAWN_RADIUS: f32 = 25.0;
+const SPAWN_RADIUS: f32 = 75.0;
 
 fn setup_level(
     mut commands: Commands,
