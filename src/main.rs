@@ -1,6 +1,4 @@
-use std::time::Duration;
-
-use bevy::{input::system::exit_on_esc_system, prelude::*, utils::Instant};
+use bevy::{input::system::exit_on_esc_system, prelude::*};
 use bevy_rapier3d::{
     na::{Isometry3, Vector3},
     physics::TimestepMode,
@@ -34,11 +32,18 @@ fn main() {
     app.run();
 }
 
+const N_WALLS: usize = 8;
+
 fn setup_level(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    let mut rng = SmallRng::seed_from_u64(4321);
+
+    let box_handle = meshes.add(Mesh::from(bevy::prelude::shape::Box::new(1.0, 1.0, 1.0)));
+
+    // Ground
     let ground_scale = Vec3::new(100.0, 1.0, 100.0);
     let position = Isometry3::new(
         Vector3::new(0.0, 0.0, 0.0),
@@ -58,7 +63,7 @@ fn setup_level(
         .with_children(|builder| {
             builder
                 .spawn_bundle(PbrBundle {
-                    mesh: meshes.add(Mesh::from(bevy::prelude::shape::Box::new(1.0, 1.0, 1.0))),
+                    mesh: box_handle.clone(),
                     material: materials.add(StandardMaterial::from(Color::DARK_GRAY)),
                     transform: Transform::from_scale(ground_scale),
                     ..Default::default()
@@ -73,6 +78,35 @@ fn setup_level(
                     ..Default::default()
                 })
                 .insert(ColliderPositionSync::Discrete);
+            let wall_material_handle = materials.add(StandardMaterial::from(Color::SILVER));
+            let wall_scale = Vec3::new(20.0, 2.0, 1.0);
+            for _ in 0..N_WALLS {
+                let center = Vec3::new(
+                    rng.gen_range(-37.5f32..37.5),
+                    1.0,
+                    rng.gen_range(-30.0f32..50.0),
+                );
+                let angle = rng.gen_range(0.1f32..0.9f32) * std::f32::consts::PI;
+                let position = Isometry3::new(center.into(), Vector3::y() * angle);
+                builder
+                    .spawn_bundle(PbrBundle {
+                        mesh: box_handle.clone(),
+                        material: wall_material_handle.clone(),
+                        transform: Transform::from_scale(wall_scale),
+                        ..Default::default()
+                    })
+                    .insert_bundle(ColliderBundle {
+                        shape: ColliderShape::cuboid(
+                            0.5 * wall_scale.x,
+                            0.5 * wall_scale.y,
+                            0.5 * wall_scale.z,
+                        )
+                        .into(),
+                        position: ColliderPosition(position).into(),
+                        ..Default::default()
+                    })
+                    .insert(ColliderPositionSync::Discrete);
+            }
         });
 
     commands.spawn_bundle(PerspectiveCameraBundle {
@@ -80,7 +114,6 @@ fn setup_level(
         ..Default::default()
     });
 }
-
 
 #[derive(Default)]
 struct Prng {
