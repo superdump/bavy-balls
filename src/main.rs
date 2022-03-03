@@ -249,17 +249,19 @@ fn follow_ball(
     keyboard_input: Res<Input<KeyCode>>,
     mut follow_mode: ResMut<FollowMode>,
     balls: Query<(Entity, &GlobalTransform, &RigidBodyVelocityComponent), With<Ball>>,
-    mut cameras: Query<(&FpsCameraController, &mut LookTransform, &mut Smoother)>,
+    mut cameras: Query<(&mut FpsCameraController, &mut LookTransform, &mut Smoother)>,
 ) {
-    let (controller, mut look_transform, mut smoother) = cameras.single_mut();
+    let (mut controller, mut look_transform, mut smoother) = cameras.single_mut();
     let n_balls = balls.iter().count();
     if keyboard_input.just_pressed(KeyCode::F) {
         follow_mode.target = match follow_mode.target {
             Some(_) => {
+                controller.enabled = true;
                 smoother.set_lag_weight(controller.smoothing_weight);
                 None
             }
             None => {
+                controller.enabled = false;
                 smoother.set_lag_weight(0.99);
                 Some(balls.iter().nth(n_balls / 2).unwrap().0)
             }
