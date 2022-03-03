@@ -6,6 +6,10 @@ use bevy_rapier3d::{
 };
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
+use smooth_bevy_cameras::{
+    controllers::fps::{FpsCameraBundle, FpsCameraController, FpsCameraPlugin},
+    LookTransformPlugin,
+};
 
 fn main() {
     let mut app = App::new();
@@ -24,6 +28,8 @@ fn main() {
         timestep_mode: TimestepMode::InterpolatedTimestep,
         ..Default::default()
     })
+    .add_plugin(LookTransformPlugin)
+    .add_plugin(FpsCameraPlugin::default())
     .add_system(exit_on_esc_system)
     .add_startup_system(setup_level)
     .add_system(spawn_balls)
@@ -109,10 +115,12 @@ fn setup_level(
             }
         });
 
-    commands.spawn_bundle(PerspectiveCameraBundle {
-        transform: Transform::from_xyz(0.0, 100.0, 100.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..Default::default()
-    });
+    commands.spawn_bundle(FpsCameraBundle::new(
+        FpsCameraController::default(),
+        PerspectiveCameraBundle::default(),
+        Vec3::new(0.0, 100.0, 100.0),
+        Vec3::ZERO,
+    ));
 }
 
 #[derive(Default)]
@@ -143,7 +151,6 @@ fn spawn_balls(
 ) {
     let t = time.seconds_since_startup();
     let ball_count = balls.iter().count();
-    // dbg!(ball_count);
     if (ball_count == 0 && to_spawn.balls.is_empty()) || keyboard_input.just_pressed(KeyCode::Space)
     {
         if rng.rng.is_none() {

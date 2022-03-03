@@ -8,6 +8,7 @@ license = "MIT OR Apache-2.0"
 bevy = "0.6.1"
 bevy_rapier3d = "0.12.1"
 rand = { version = "0.8.5", features = ["small_rng"]}
+smooth-bevy-cameras = "0.2.0"
 
 # Enable only a small amount of optimization in debug mode
 [profile.dev]
