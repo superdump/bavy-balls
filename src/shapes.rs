@@ -1,8 +1,12 @@
 use bevy::{
     math::{const_vec3, Quat, Vec3},
     prelude::Mesh,
-    render::{mesh::Indices, render_resource::PrimitiveTopology},
+    render::{
+        mesh::{Indices, VertexAttributeValues},
+        render_resource::PrimitiveTopology,
+    },
 };
+use bevy_rapier3d::{na::Point3, prelude::ColliderShape};
 
 pub struct HalfCylinder {
     start: Vec3,
@@ -24,11 +28,11 @@ impl HalfCylinder {
         }
     }
 
-    pub fn from_scale(scale: f32) -> Self {
+    pub fn from_radius_and_length(radius: f32, length: f32) -> Self {
         let mut half_cylinder = Self::default();
-        half_cylinder.start *= scale;
-        half_cylinder.end *= scale;
-        half_cylinder.radius *= scale;
+        half_cylinder.start *= length;
+        half_cylinder.end *= length;
+        half_cylinder.radius = radius;
         half_cylinder
     }
 }
@@ -93,4 +97,26 @@ impl From<HalfCylinder> for Mesh {
         mesh.set_indices(Some(indices));
         mesh
     }
+}
+
+pub fn mesh_to_collider_shape(mesh: &Mesh) -> Option<ColliderShape> {
+    let vertices = if let Some(VertexAttributeValues::Float32x3(positions)) =
+        mesh.attribute(Mesh::ATTRIBUTE_POSITION)
+    {
+        positions
+            .iter()
+            .map(|p| Point3::from_slice(p))
+            .collect::<Vec<_>>()
+    } else {
+        return None;
+    };
+    let indices = if let Some(Indices::U32(indices)) = mesh.indices() {
+        indices
+            .chunks_exact(3)
+            .map(|tri| [tri[0], tri[1], tri[2]])
+            .collect::<Vec<_>>()
+    } else {
+        return None;
+    };
+    Some(ColliderShape::trimesh(vertices, indices))
 }
