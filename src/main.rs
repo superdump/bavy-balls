@@ -342,6 +342,7 @@ fn spawn_ball(
 }
 
 const BOUNDS: Vec3 = const_vec3!([0.0, -1000.0, f32::MIN]);
+const BOUNDS_MARGIN: Vec3 = const_vec3!([0.0, -SPAWN_RADIUS - 10.0, 0.0]);
 
 fn despawn_balls(
     mut commands: Commands,
@@ -353,14 +354,14 @@ fn despawn_balls(
     *bounds = track
         .iter()
         .next()
-        .map_or(Some(BOUNDS), |aabb| Some(aabb.min()));
+        .map_or(Some(BOUNDS), |aabb| Some(aabb.min() + BOUNDS_MARGIN));
     let bounds = bounds.unwrap();
     let now = Instant::now();
     let round_start = round.start;
     for player in round.players.iter_mut() {
         if let Some(entity) = player.entity {
             if let Ok(transform) = balls.get(entity) {
-                if transform.translation.y < bounds.y - 10.0 {
+                if transform.translation.y < bounds.y || transform.translation.z <= bounds.z {
                     player.distance = transform.translation.z.max(bounds.z);
                     let result = if transform.translation.z <= bounds.z {
                         player.end = Some(now);
