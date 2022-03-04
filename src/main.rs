@@ -53,6 +53,7 @@ fn main() {
         })
         .init_resource::<FollowMode>()
         .add_system(hacks)
+        .add_system_set(SystemSet::on_enter(GameState::Menu).with_system(setup_menu))
         .add_system_set(
             SystemSet::on_enter(GameState::Playing)
                 .with_system(setup_level)
@@ -68,9 +69,18 @@ fn main() {
             SystemSet::on_exit(GameState::Playing)
                 .with_system(despawn_level)
                 .with_system(despawn_all_balls),
-        );
+        )
+        .add_system_set(SystemSet::on_enter(GameState::GameOver).with_system(setup_game_over));
 
     app.run();
+}
+
+fn setup_menu() {
+    info!("Menu");
+}
+
+fn setup_game_over() {
+    info!("Game over!");
 }
 
 fn hacks(keyboard_input: Res<Input<KeyCode>>, mut state: ResMut<State<GameState>>) {
@@ -386,6 +396,7 @@ fn despawn_balls(
     balls: Query<&GlobalTransform, With<Ball>>,
     mut bounds: Local<Option<Vec3>>,
     mut round: ResMut<RoundState>,
+    mut state: ResMut<State<GameState>>,
 ) {
     *bounds = track
         .iter()
@@ -394,13 +405,14 @@ fn despawn_balls(
     let bounds = bounds.unwrap();
     let now = Instant::now();
     let round_start = round.start;
+    let mut finished_count = 0;
     for player in round.players.iter_mut() {
         if let Some(entity) = player.entity {
             if let Ok(transform) = balls.get(entity) {
                 if transform.translation.y < bounds.y || transform.translation.z <= bounds.z {
                     player.distance = transform.translation.z.max(bounds.z);
+                    player.end = Some(now);
                     let result = if transform.translation.z <= bounds.z {
-                        player.end = Some(now);
                         "finished".to_string()
                     } else {
                         format!(
@@ -416,9 +428,16 @@ fn despawn_balls(
                         (now - player.start).as_secs_f32()
                     );
                     commands.entity(entity).despawn_recursive();
+                    player.entity = None;
                 }
             }
         }
+        if player.end.is_some() {
+            finished_count += 1;
+        }
+    }
+    if finished_count >= N_PLAYERS {
+        state.set(GameState::GameOver).ok();
     }
 }
 
