@@ -376,7 +376,7 @@ const BALL_INFO: [BallInfo; N_PLAYERS] = [
 ];
 
 struct PlayerState {
-    name: &'static str,
+    name: String,
     color: Color,
     entity: Option<Entity>,
     start: Instant,
@@ -386,7 +386,7 @@ struct PlayerState {
 }
 
 impl PlayerState {
-    fn new(name: &'static str, color: Color, start: Instant) -> Self {
+    fn new(name: String, color: Color, start: Instant) -> Self {
         Self {
             name,
             color,
@@ -419,7 +419,7 @@ fn start_round(mut rng: Local<Prng>, mut round: ResMut<RoundState>, mut windows:
     round.players = (0..N_PLAYERS)
         .map(|i| {
             PlayerState::new(
-                BALL_INFO[i].name,
+                format!("{} ({})", BALL_INFO[i].name, (i + 1) % N_PLAYERS),
                 BALL_INFO[i].color,
                 round.start + Duration::from_millis(rng.gen_range(0u64..MAX_DISADVANTAGE_MS)),
             )
