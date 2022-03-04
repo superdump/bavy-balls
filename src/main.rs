@@ -87,7 +87,10 @@ fn setup_level(
     );
 
     commands.spawn_bundle(FpsCameraBundle::new(
-        FpsCameraController::default(),
+        FpsCameraController {
+            enabled: false,
+            ..Default::default()
+        },
         PerspectiveCameraBundle::default(),
         SPAWN_POSITION + Vec3::new(0.0, 1.0, 1.0),
         SPAWN_POSITION,
