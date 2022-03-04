@@ -17,6 +17,13 @@ use smooth_bevy_cameras::{
     LookTransform, LookTransformPlugin, Smoother,
 };
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+enum GameState {
+    Menu,
+    Playing,
+    GameOver,
+}
+
 fn main() {
     let mut app = App::new();
 
@@ -37,23 +44,50 @@ fn main() {
     })
     .add_plugin(LookTransformPlugin)
     .add_plugin(FpsCameraPlugin::default())
-    .add_system(exit_on_esc_system)
-    .insert_resource(RoundState {
-        start: Instant::now(),
-        players: Vec::new(),
-    })
-    .add_startup_system(setup_level)
-    .add_startup_system(start_round)
-    .init_resource::<FollowMode>()
-    .add_system(follow_ball)
-    .add_system(spawn_balls)
-    .add_system(despawn_balls);
+    .add_system(exit_on_esc_system);
+
+    app.add_state(GameState::Menu)
+        .insert_resource(RoundState {
+            start: Instant::now(),
+            players: Vec::new(),
+        })
+        .init_resource::<FollowMode>()
+        .add_system(hacks)
+        .add_system_set(
+            SystemSet::on_enter(GameState::Playing)
+                .with_system(setup_level)
+                .with_system(start_round),
+        )
+        .add_system_set(
+            SystemSet::on_update(GameState::Playing)
+                .with_system(follow_ball)
+                .with_system(spawn_balls)
+                .with_system(despawn_balls),
+        )
+        .add_system_set(
+            SystemSet::on_exit(GameState::Playing)
+                .with_system(despawn_level)
+                .with_system(despawn_all_balls),
+        );
 
     app.run();
 }
 
+fn hacks(keyboard_input: Res<Input<KeyCode>>, mut state: ResMut<State<GameState>>) {
+    if keyboard_input.just_pressed(KeyCode::M) {
+        state.set(GameState::Menu).ok();
+    } else if keyboard_input.just_pressed(KeyCode::P) {
+        state.set(GameState::Playing).ok();
+    } else if keyboard_input.just_pressed(KeyCode::O) {
+        state.set(GameState::GameOver).ok();
+    }
+}
+
 const SPAWN_POSITION: Vec3 = Vec3::ZERO;
 const SPAWN_RADIUS: f32 = 75.0;
+
+#[derive(Component)]
+struct GameLevel;
 
 fn setup_level(
     mut commands: Commands,
@@ -86,15 +120,17 @@ fn setup_level(
         Quat::IDENTITY,
     );
 
-    commands.spawn_bundle(FpsCameraBundle::new(
-        FpsCameraController {
-            enabled: false,
-            ..Default::default()
-        },
-        PerspectiveCameraBundle::default(),
-        SPAWN_POSITION + Vec3::new(0.0, 1.0, 1.0),
-        SPAWN_POSITION,
-    ));
+    commands
+        .spawn_bundle(FpsCameraBundle::new(
+            FpsCameraController {
+                enabled: false,
+                ..Default::default()
+            },
+            PerspectiveCameraBundle::default(),
+            SPAWN_POSITION + Vec3::new(0.0, 1.0, 1.0),
+            SPAWN_POSITION,
+        ))
+        .insert(GameLevel);
 }
 
 fn spawn_halfpipe_segment(
@@ -120,7 +156,7 @@ fn spawn_halfpipe_segment(
             .into(),
             ..Default::default()
         })
-        .insert(RigidBodyPositionSync::Discrete)
+        .insert_bundle((RigidBodyPositionSync::Discrete, GameLevel))
         .with_children(|builder| {
             builder
                 .spawn_bundle(PbrBundle {
@@ -382,6 +418,21 @@ fn despawn_balls(
                     commands.entity(entity).despawn_recursive();
                 }
             }
+        }
+    }
+}
+
+fn despawn_level(mut commands: Commands, level_entities: Query<Entity, With<GameLevel>>) {
+    for entity in level_entities.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
+}
+
+fn despawn_all_balls(mut commands: Commands, mut round: ResMut<RoundState>) {
+    for player in round.players.iter_mut() {
+        if let Some(entity) = player.entity {
+            commands.entity(entity).despawn_recursive();
+            player.entity = None;
         }
     }
 }
