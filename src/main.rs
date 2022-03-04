@@ -501,7 +501,7 @@ fn setup_live_scoreboard(mut commands: Commands, font_handle: Res<FontHandle>) {
                                 overflow: Overflow::Hidden,
                                 ..Default::default()
                             },
-                            color: Color::rgba(0.5, 0.5, 0.5, 0.10).into(),
+                            color: Color::rgba(0.75, 0.75, 0.75, 0.10).into(),
                             ..Default::default()
                         })
                         .with_children(|parent| {
