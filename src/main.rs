@@ -170,11 +170,11 @@ const BALL_COLOR: [BallInfo; N_PLAYERS] = [
     },
     BallInfo {
         name: "BLUE",
-        color: Color::AZURE,
+        color: Color::MIDNIGHT_BLUE,
     },
     BallInfo {
         name: "INDIGO",
-        color: Color::MIDNIGHT_BLUE,
+        color: Color::BLUE,
     },
     BallInfo {
         name: "VIOLET",
@@ -185,12 +185,12 @@ const BALL_COLOR: [BallInfo; N_PLAYERS] = [
         color: Color::WHITE,
     },
     BallInfo {
-        name: "SILVER",
-        color: Color::SILVER,
-    },
-    BallInfo {
         name: "DARK_GRAY",
         color: Color::DARK_GRAY,
+    },
+    BallInfo {
+        name: "BLACK",
+        color: Color::BLACK,
     },
 ];
 
