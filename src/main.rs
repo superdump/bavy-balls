@@ -52,6 +52,8 @@ fn main() {
         })
         .init_resource::<FollowMode>()
         .add_startup_system(setup)
+        .add_startup_system(setup_audio)
+        .add_system(restart_audio)
         // .add_system(hacks)
         .add_system_set(SystemSet::on_enter(GameState::Menu).with_system(setup_menu))
         .add_system_set(SystemSet::on_update(GameState::Menu).with_system(button_system))
@@ -115,6 +117,31 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.insert_resource(FontHandle {
         handle: asset_server.load("fonts/FiraSans-Bold.ttf"),
     });
+}
+
+struct MusicHandle {
+    handle: Handle<AudioSource>,
+    start: Instant,
+    duration: Duration,
+}
+
+fn setup_audio(mut commands: Commands, asset_server: Res<AssetServer>, audio: Res<Audio>) {
+    let music =
+        asset_server.load("music/alex-productions-epic-cinematic-gaming-cyberpunk-reset.ogg");
+    audio.play(music.clone());
+    commands.insert_resource(MusicHandle {
+        handle: music,
+        start: Instant::now(),
+        duration: Duration::from_millis(190200),
+    });
+}
+
+fn restart_audio(audio: Res<Audio>, mut music: ResMut<MusicHandle>) {
+    let now = Instant::now();
+    if now > music.start + music.duration {
+        audio.play(music.handle.clone());
+        music.start = now;
+    }
 }
 
 fn setup_menu(mut commands: Commands, font_handle: Res<FontHandle>, mut windows: ResMut<Windows>) {
