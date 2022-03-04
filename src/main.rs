@@ -83,6 +83,7 @@ const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
 const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
 const PRESSED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
 
+#[allow(clippy::type_complexity)]
 fn button_system(
     mut interaction_query: Query<
         (&Interaction, &mut UiColor),
@@ -331,7 +332,7 @@ struct BallInfo {
     color: Color,
 }
 
-const BALL_COLOR: [BallInfo; N_PLAYERS] = [
+const BALL_INFO: [BallInfo; N_PLAYERS] = [
     BallInfo {
         name: "RED",
         color: Color::RED,
@@ -418,8 +419,8 @@ fn start_round(mut rng: Local<Prng>, mut round: ResMut<RoundState>, mut windows:
     round.players = (0..N_PLAYERS)
         .map(|i| {
             PlayerState::new(
-                BALL_COLOR[i].name,
-                BALL_COLOR[i].color,
+                BALL_INFO[i].name,
+                BALL_INFO[i].color,
                 round.start + Duration::from_millis(rng.gen_range(0u64..MAX_DISADVANTAGE_MS)),
             )
         })
@@ -520,7 +521,7 @@ fn setup_live_scoreboard(mut commands: Commands, font_handle: Res<FontHandle>) {
                                 .insert(Leaderboard)
                                 .with_children(|parent| {
                                     // List items
-                                    for i in 0..10 {
+                                    for (i, ball_info) in BALL_INFO.iter().enumerate() {
                                         parent
                                             .spawn_bundle(NodeBundle {
                                                 style: Style {
@@ -552,11 +553,11 @@ fn setup_live_scoreboard(mut commands: Commands, font_handle: Res<FontHandle>) {
                                                             ..Default::default()
                                                         },
                                                         text: Text::with_section(
-                                                            BALL_COLOR[i].name,
+                                                            ball_info.name,
                                                             TextStyle {
                                                                 font: font_handle.handle.clone(),
                                                                 font_size: 20.,
-                                                                color: BALL_COLOR[i].color,
+                                                                color: ball_info.color,
                                                             },
                                                             Default::default(),
                                                         ),
@@ -579,11 +580,11 @@ fn setup_live_scoreboard(mut commands: Commands, font_handle: Res<FontHandle>) {
                                                             ..Default::default()
                                                         },
                                                         text: Text::with_section(
-                                                            BALL_COLOR[i].name,
+                                                            ball_info.name,
                                                             TextStyle {
                                                                 font: font_handle.handle.clone(),
                                                                 font_size: 20.,
-                                                                color: BALL_COLOR[i].color,
+                                                                color: ball_info.color,
                                                             },
                                                             Default::default(),
                                                         ),
