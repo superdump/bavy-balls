@@ -381,6 +381,7 @@ struct PlayerState {
     start: Instant,
     end: Option<Instant>,
     distance: f32,
+    finished: bool,
 }
 
 impl PlayerState {
@@ -392,6 +393,7 @@ impl PlayerState {
             start,
             end: None,
             distance: 0.0,
+            finished: false,
         }
     }
 }
@@ -430,6 +432,11 @@ struct Leaderboard;
 
 #[derive(Component)]
 struct LeaderboardPlayer {
+    index: usize,
+}
+
+#[derive(Component)]
+struct LeaderboardPlayerName {
     index: usize,
 }
 
@@ -529,31 +536,33 @@ fn setup_live_scoreboard(mut commands: Commands, font_handle: Res<FontHandle>) {
                                                 ..Default::default()
                                             })
                                             .with_children(|parent| {
-                                                parent.spawn_bundle(TextBundle {
-                                                    style: Style {
-                                                        flex_shrink: 0.,
-                                                        size: Size::new(
-                                                            Val::Undefined,
-                                                            Val::Px(20.),
-                                                        ),
-                                                        margin: Rect {
-                                                            left: Val::Px(10.),
-                                                            right: Val::Auto,
+                                                parent
+                                                    .spawn_bundle(TextBundle {
+                                                        style: Style {
+                                                            flex_shrink: 0.,
+                                                            size: Size::new(
+                                                                Val::Undefined,
+                                                                Val::Px(20.),
+                                                            ),
+                                                            margin: Rect {
+                                                                left: Val::Px(10.),
+                                                                right: Val::Auto,
+                                                                ..Default::default()
+                                                            },
                                                             ..Default::default()
                                                         },
+                                                        text: Text::with_section(
+                                                            BALL_COLOR[i].name,
+                                                            TextStyle {
+                                                                font: font_handle.handle.clone(),
+                                                                font_size: 20.,
+                                                                color: BALL_COLOR[i].color,
+                                                            },
+                                                            Default::default(),
+                                                        ),
                                                         ..Default::default()
-                                                    },
-                                                    text: Text::with_section(
-                                                        BALL_COLOR[i].name,
-                                                        TextStyle {
-                                                            font: font_handle.handle.clone(),
-                                                            font_size: 20.,
-                                                            color: BALL_COLOR[i].color,
-                                                        },
-                                                        Default::default(),
-                                                    ),
-                                                    ..Default::default()
-                                                });
+                                                    })
+                                                    .insert(LeaderboardPlayerName { index: i });
                                                 parent
                                                     .spawn_bundle(TextBundle {
                                                         style: Style {
@@ -589,10 +598,46 @@ fn setup_live_scoreboard(mut commands: Commands, font_handle: Res<FontHandle>) {
         });
 }
 
-fn update_leaderboard(mut query: Query<(&LeaderboardPlayer, &mut Text)>, round: Res<RoundState>) {
-    for (player, mut text) in query.iter_mut() {
-        let distance = round.players[player.index].distance;
-        text.sections[0].value = format!("{:5.1}m", distance.abs());
+fn update_leaderboard(
+    mut names: Query<(&LeaderboardPlayerName, &mut Text), Without<LeaderboardPlayer>>,
+    mut distances: Query<(&LeaderboardPlayer, &mut Text), Without<LeaderboardPlayerName>>,
+    round: Res<RoundState>,
+) {
+    let mut player_order = round
+        .players
+        .iter()
+        .enumerate()
+        .map(|(i, player)| (player.distance, player.end, i))
+        .collect::<Vec<_>>();
+    player_order.sort_unstable_by(|a, b| {
+        a.0.partial_cmp(&b.0).unwrap().then_with(|| {
+            let old = Instant::now() - Duration::from_secs(100000);
+            a.1.unwrap_or(old).cmp(&b.1.unwrap_or(old))
+        })
+    });
+    for (player, mut text) in distances.iter_mut() {
+        let list_index = player.index;
+        let (distance, end, player_index) = player_order[list_index];
+        text.sections[0].value = if round.players[player_index].finished {
+            format!("{:5.3}s", (end.unwrap() - round.start).as_secs_f64())
+        } else {
+            format!(
+                "{}{:5.1}m",
+                if end.is_some() && !round.players[player_index].finished {
+                    "DNF "
+                } else {
+                    ""
+                },
+                distance.abs()
+            )
+        };
+        text.sections[0].style.color = round.players[player_index].color;
+    }
+    for (player, mut text) in names.iter_mut() {
+        let list_index = player.index;
+        let (_, _, player_index) = player_order[list_index];
+        text.sections[0].value = round.players[player_index].name.to_string();
+        text.sections[0].style.color = round.players[player_index].color;
     }
 }
 
@@ -719,6 +764,7 @@ fn despawn_balls(
                 if transform.translation.y < bounds.y || transform.translation.z <= bounds.z {
                     player.end = Some(now);
                     let result = if transform.translation.z <= bounds.z {
+                        player.finished = true;
                         "finished".to_string()
                     } else {
                         format!(
