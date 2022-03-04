@@ -52,7 +52,7 @@ fn main() {
             players: Vec::new(),
         })
         .init_resource::<FollowMode>()
-        .add_system(hacks)
+        // .add_system(hacks)
         .add_system_set(SystemSet::on_enter(GameState::Menu).with_system(setup_menu))
         .add_system_set(
             SystemSet::on_enter(GameState::Playing)
@@ -75,23 +75,25 @@ fn main() {
     app.run();
 }
 
-fn setup_menu() {
+fn setup_menu(mut state: ResMut<State<GameState>>) {
     info!("Menu");
+    state.set(GameState::Playing).ok();
 }
 
-fn setup_game_over() {
+fn setup_game_over(mut state: ResMut<State<GameState>>) {
     info!("Game over!");
+    state.set(GameState::Menu).ok();
 }
 
-fn hacks(keyboard_input: Res<Input<KeyCode>>, mut state: ResMut<State<GameState>>) {
-    if keyboard_input.just_pressed(KeyCode::M) {
-        state.set(GameState::Menu).ok();
-    } else if keyboard_input.just_pressed(KeyCode::P) {
-        state.set(GameState::Playing).ok();
-    } else if keyboard_input.just_pressed(KeyCode::O) {
-        state.set(GameState::GameOver).ok();
-    }
-}
+// fn hacks(keyboard_input: Res<Input<KeyCode>>, mut state: ResMut<State<GameState>>) {
+//     if keyboard_input.just_pressed(KeyCode::M) {
+//         state.set(GameState::Menu).ok();
+//     } else if keyboard_input.just_pressed(KeyCode::P) {
+//         state.set(GameState::Playing).ok();
+//     } else if keyboard_input.just_pressed(KeyCode::O) {
+//         state.set(GameState::GameOver).ok();
+//     }
+// }
 
 const SPAWN_POSITION: Vec3 = Vec3::ZERO;
 const SPAWN_RADIUS: f32 = 75.0;
@@ -288,6 +290,7 @@ fn start_round(mut rng: Local<Prng>, mut round: ResMut<RoundState>) {
             )
         })
         .collect();
+    info!("Starting the round!");
 }
 
 fn spawn_balls(
@@ -305,7 +308,7 @@ fn spawn_balls(
     let meshes = meshes.into_inner();
     let materials = materials.into_inner();
     for player in round.players.iter_mut() {
-        if player.entity.is_none() && now > player.start {
+        if player.entity.is_none() && player.end.is_none() && now > player.start {
             let spawn_point = SPAWN_POSITION
                 + Vec3::new(
                     rng.gen_range((-0.9 * SPAWN_RADIUS + 1.0)..(0.9 * SPAWN_RADIUS - 1.0)),
