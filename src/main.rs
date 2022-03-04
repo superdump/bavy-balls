@@ -1,5 +1,10 @@
+use std::time::Duration;
+
 use bavy_balls::shapes::{mesh_to_collider_shape, HalfCylinderPath};
-use bevy::{input::system::exit_on_esc_system, prelude::*, render::primitives::Aabb};
+use bevy::{
+    input::system::exit_on_esc_system, math::const_vec3, prelude::*, render::primitives::Aabb,
+    utils::Instant,
+};
 use bevy_rapier3d::{
     na::{Isometry3, Vector3},
     physics::TimestepMode,
@@ -33,7 +38,12 @@ fn main() {
     .add_plugin(LookTransformPlugin)
     .add_plugin(FpsCameraPlugin::default())
     .add_system(exit_on_esc_system)
+    .insert_resource(RoundState {
+        start: Instant::now(),
+        players: Vec::new(),
+    })
     .add_startup_system(setup_level)
+    .add_startup_system(start_round)
     .init_resource::<FollowMode>()
     .add_system(follow_ball)
     .add_system(spawn_balls)
@@ -54,7 +64,7 @@ fn setup_level(
         start: SPAWN_POSITION,
         radius: SPAWN_RADIUS,
         segment_length: 100.0,
-        n_segments: 100,
+        n_segments: 10,
         seed: 4321,
         yaw_range: (-std::f32::consts::FRAC_PI_4)..std::f32::consts::FRAC_PI_4,
         pitch_range: (-std::f32::consts::FRAC_PI_4)..(-0.1 * std::f32::consts::FRAC_PI_4),
@@ -63,7 +73,7 @@ fn setup_level(
     let half_cylinder_collider = mesh_to_collider_shape(&half_cylinder_mesh)
         .expect("Failed to convert half cylinder mesh to collider");
     let half_cylinder_handle = meshes.add(half_cylinder_mesh);
-    let mut half_cylinder_material = StandardMaterial::from(Color::DARK_GRAY);
+    let mut half_cylinder_material = StandardMaterial::from(Color::SILVER);
     half_cylinder_material.perceptual_roughness = 0.5;
     let half_cylinder_material = materials.add(half_cylinder_material);
 
@@ -134,47 +144,132 @@ struct Prng {
 #[derive(Component)]
 struct Ball;
 
-#[derive(Default)]
-struct BallsToSpawn {
-    balls: Vec<(f64, Vec3, Color)>,
-}
-
 const N_PLAYERS: usize = 10;
 
-#[allow(clippy::too_many_arguments)]
+struct BallInfo {
+    name: &'static str,
+    color: Color,
+}
+
+const BALL_COLOR: [BallInfo; N_PLAYERS] = [
+    BallInfo {
+        name: "RED",
+        color: Color::RED,
+    },
+    BallInfo {
+        name: "ORANGE",
+        color: Color::ORANGE_RED,
+    },
+    BallInfo {
+        name: "YELLOW",
+        color: Color::ORANGE,
+    },
+    BallInfo {
+        name: "GREEN",
+        color: Color::GREEN,
+    },
+    BallInfo {
+        name: "BLUE",
+        color: Color::AZURE,
+    },
+    BallInfo {
+        name: "INDIGO",
+        color: Color::MIDNIGHT_BLUE,
+    },
+    BallInfo {
+        name: "VIOLET",
+        color: Color::INDIGO,
+    },
+    BallInfo {
+        name: "WHITE",
+        color: Color::WHITE,
+    },
+    BallInfo {
+        name: "SILVER",
+        color: Color::SILVER,
+    },
+    BallInfo {
+        name: "DARK_GRAY",
+        color: Color::DARK_GRAY,
+    },
+];
+
+struct PlayerState {
+    name: &'static str,
+    color: Color,
+    entity: Option<Entity>,
+    start: Instant,
+    end: Option<Instant>,
+    distance: f32,
+}
+
+impl PlayerState {
+    fn new(name: &'static str, color: Color, start: Instant) -> Self {
+        Self {
+            name,
+            color,
+            entity: None,
+            start,
+            end: None,
+            distance: 0.0,
+        }
+    }
+}
+
+struct RoundState {
+    start: Instant,
+    players: Vec<PlayerState>,
+}
+
+const MAX_DISADVANTAGE_MS: u64 = 10000;
+
+fn start_round(mut rng: Local<Prng>, mut round: ResMut<RoundState>) {
+    if rng.rng.is_none() {
+        rng.rng = Some(SmallRng::seed_from_u64(rand::random()));
+    }
+    let rng = rng.rng.as_mut().unwrap();
+    round.start = Instant::now();
+    round.players.clear();
+    round.players = (0..N_PLAYERS)
+        .map(|i| {
+            PlayerState::new(
+                BALL_COLOR[i].name,
+                BALL_COLOR[i].color,
+                round.start + Duration::from_millis(rng.gen_range(0u64..MAX_DISADVANTAGE_MS)),
+            )
+        })
+        .collect();
+}
+
 fn spawn_balls(
     mut commands: Commands,
     meshes: ResMut<Assets<Mesh>>,
     materials: ResMut<Assets<StandardMaterial>>,
     mut rng: Local<Prng>,
-    mut to_spawn: Local<BallsToSpawn>,
-    time: Res<Time>,
-    balls: Query<Entity, With<Ball>>,
+    mut round: ResMut<RoundState>,
 ) {
-    let t = time.seconds_since_startup();
-    let ball_count = balls.iter().count();
-    if ball_count == 0 && to_spawn.balls.is_empty() {
-        if rng.rng.is_none() {
-            rng.rng = Some(SmallRng::seed_from_u64(1234));
-        }
-        let rng = rng.rng.as_mut().unwrap();
-        for i in 0..N_PLAYERS {
-            let spawn_time = t + rng.gen_range(0.0..10.0);
-            let spawn_point = Vec3::new(
-                rng.gen_range((-0.9 * SPAWN_RADIUS + 1.0)..(0.9 * SPAWN_RADIUS - 1.0)),
-                0.0,
-                -1.0,
-            );
-            let ball_color = Color::hsl(360.0 * (i as f32) / (N_PLAYERS as f32), 1.0, 0.5);
-            to_spawn.balls.push((spawn_time, spawn_point, ball_color));
-        }
+    let now = Instant::now();
+    if rng.rng.is_none() {
+        rng.rng = Some(SmallRng::seed_from_u64(rand::random()));
     }
+    let rng = rng.rng.as_mut().unwrap();
     let meshes = meshes.into_inner();
     let materials = materials.into_inner();
-    for i in (0..to_spawn.balls.len()).rev() {
-        if t > to_spawn.balls[i].0 {
-            let (_t, spawn_point, ball_color) = to_spawn.balls.swap_remove(i);
-            spawn_ball(&mut commands, meshes, materials, spawn_point, ball_color);
+    for player in round.players.iter_mut() {
+        if player.entity.is_none() && now > player.start {
+            let spawn_point = SPAWN_POSITION
+                + Vec3::new(
+                    rng.gen_range((-0.9 * SPAWN_RADIUS + 1.0)..(0.9 * SPAWN_RADIUS - 1.0)),
+                    0.0,
+                    -1.0,
+                );
+            player.entity = Some(spawn_ball(
+                &mut commands,
+                meshes,
+                materials,
+                spawn_point,
+                player.color,
+            ));
         }
     }
 }
@@ -185,7 +280,7 @@ fn spawn_ball(
     materials: &mut Assets<StandardMaterial>,
     spawn_point: Vec3,
     ball_color: Color,
-) {
+) -> Entity {
     commands
         .spawn_bundle(RigidBodyBundle {
             body_type: RigidBodyType::Dynamic.into(),
@@ -239,25 +334,50 @@ fn spawn_ball(
                     },
                     ..Default::default()
                 });
-        });
+        })
+        .id()
 }
 
-const MIN_Y: f32 = -1000.0;
+const BOUNDS: Vec3 = const_vec3!([0.0, -1000.0, f32::MIN]);
 
 fn despawn_balls(
     mut commands: Commands,
     track: Query<&Aabb, With<Track>>,
-    balls: Query<(Entity, &Transform), With<Ball>>,
-    mut min: Local<Option<f32>>,
+    balls: Query<&GlobalTransform, With<Ball>>,
+    mut bounds: Local<Option<Vec3>>,
+    mut round: ResMut<RoundState>,
 ) {
-    *min = track
+    *bounds = track
         .iter()
         .next()
-        .map_or(Some(MIN_Y), |aabb| Some(aabb.min().y));
-    let min = min.unwrap();
-    for (ball, transform) in balls.iter() {
-        if transform.translation.y < min {
-            commands.entity(ball).despawn_recursive();
+        .map_or(Some(BOUNDS), |aabb| Some(aabb.min()));
+    let bounds = bounds.unwrap();
+    let now = Instant::now();
+    let round_start = round.start;
+    for player in round.players.iter_mut() {
+        if let Some(entity) = player.entity {
+            if let Ok(transform) = balls.get(entity) {
+                if transform.translation.y < bounds.y - 10.0 {
+                    player.distance = transform.translation.z.max(bounds.z);
+                    let result = if transform.translation.z <= bounds.z {
+                        player.end = Some(now);
+                        "finished".to_string()
+                    } else {
+                        format!(
+                            "did not finish ({:2.1}% complete)",
+                            100.0 * player.distance / bounds.z
+                        )
+                    };
+                    info!(
+                        "{} {} in {:3.2}s ({:3.2}s)",
+                        player.name,
+                        result,
+                        (now - round_start).as_secs_f32(),
+                        (now - player.start).as_secs_f32()
+                    );
+                    commands.entity(entity).despawn_recursive();
+                }
+            }
         }
     }
 }
