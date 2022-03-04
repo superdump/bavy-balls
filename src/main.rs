@@ -3,7 +3,7 @@ use std::time::Duration;
 use bavy_balls::shapes::{mesh_to_collider_shape, HalfCylinderPath};
 use bevy::{
     input::system::exit_on_esc_system, math::const_vec3, prelude::*, render::primitives::Aabb,
-    utils::Instant,
+    ui::CAMERA_UI, utils::Instant,
 };
 use bevy_rapier3d::{
     na::{Isometry3, Vector3},
@@ -32,7 +32,6 @@ fn main() {
         width: 960.0,
         height: 540.0,
         resizable: false,
-        cursor_visible: false,
         ..Default::default()
     })
     .insert_resource(ClearColor(Color::BLACK))
@@ -52,8 +51,11 @@ fn main() {
             players: Vec::new(),
         })
         .init_resource::<FollowMode>()
+        .add_startup_system(setup)
         // .add_system(hacks)
         .add_system_set(SystemSet::on_enter(GameState::Menu).with_system(setup_menu))
+        .add_system_set(SystemSet::on_update(GameState::Menu).with_system(button_system))
+        .add_system_set(SystemSet::on_exit(GameState::Menu).with_system(cleanup_menu))
         .add_system_set(
             SystemSet::on_enter(GameState::Playing)
                 .with_system(setup_level)
@@ -75,9 +77,133 @@ fn main() {
     app.run();
 }
 
-fn setup_menu(mut state: ResMut<State<GameState>>) {
+const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
+const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
+const PRESSED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
+
+fn button_system(
+    mut interaction_query: Query<
+        (&Interaction, &mut UiColor),
+        (Changed<Interaction>, With<Button>),
+    >,
+    mut state: ResMut<State<GameState>>,
+) {
+    for (interaction, mut color) in interaction_query.iter_mut() {
+        match *interaction {
+            Interaction::Clicked => {
+                *color = PRESSED_BUTTON.into();
+                state.set(GameState::Playing).ok();
+            }
+            Interaction::Hovered => {
+                *color = HOVERED_BUTTON.into();
+            }
+            Interaction::None => {
+                *color = NORMAL_BUTTON.into();
+            }
+        }
+    }
+}
+
+struct FontHandle {
+    handle: Handle<Font>,
+}
+
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+    commands.insert_resource(FontHandle {
+        handle: asset_server.load("fonts/FiraSans-Bold.ttf"),
+    });
+}
+
+fn setup_menu(mut commands: Commands, font_handle: Res<FontHandle>, mut windows: ResMut<Windows>) {
+    for window in windows.iter_mut() {
+        window.set_cursor_visibility(true);
+    }
+    // ui camera
+    commands.spawn_bundle(UiCameraBundle::default());
+    commands
+        .spawn_bundle(NodeBundle {
+            style: Style {
+                flex_direction: FlexDirection::ColumnReverse,
+                size: Size::new(Val::Percent(100.0), Val::Percent(100.0)),
+                justify_content: JustifyContent::SpaceBetween,
+                ..Default::default()
+            },
+            color: Color::NONE.into(),
+            ..Default::default()
+        })
+        .with_children(|builder| {
+            builder.spawn_bundle(TextBundle {
+                text: Text::with_section(
+                    "BAVY BALLS",
+                    TextStyle {
+                        font: font_handle.handle.clone(),
+                        font_size: 60.0,
+                        color: Color::rgb(0.9, 0.9, 0.9),
+                    },
+                    TextAlignment {
+                        vertical: VerticalAlign::Center,
+                        horizontal: HorizontalAlign::Center,
+                    },
+                ),
+                style: Style {
+                    size: Size::new(Val::Px(300.0), Val::Px(65.0)),
+                    // center button
+                    margin: Rect::all(Val::Auto),
+                    // horizontally center child text
+                    justify_content: JustifyContent::Center,
+                    // vertically center child text
+                    align_items: AlignItems::Center,
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+            builder
+                .spawn_bundle(ButtonBundle {
+                    style: Style {
+                        size: Size::new(Val::Px(150.0), Val::Px(65.0)),
+                        // center button
+                        margin: Rect::all(Val::Auto),
+                        // horizontally center child text
+                        justify_content: JustifyContent::Center,
+                        // vertically center child text
+                        align_items: AlignItems::Center,
+                        ..Default::default()
+                    },
+                    color: NORMAL_BUTTON.into(),
+                    ..Default::default()
+                })
+                .with_children(|parent| {
+                    parent.spawn_bundle(TextBundle {
+                        text: Text::with_section(
+                            "START",
+                            TextStyle {
+                                font: font_handle.handle.clone(),
+                                font_size: 40.0,
+                                color: Color::rgb(0.9, 0.9, 0.9),
+                            },
+                            Default::default(),
+                        ),
+                        ..Default::default()
+                    });
+                });
+        });
+
     info!("Menu");
-    state.set(GameState::Playing).ok();
+}
+
+fn cleanup_menu(
+    mut commands: Commands,
+    cameras: Query<(Entity, &Camera)>,
+    nodes: Query<Entity, With<Node>>,
+) {
+    for (entity, camera) in cameras.iter() {
+        if camera.name == Some(CAMERA_UI.to_string()) {
+            commands.entity(entity).despawn_recursive();
+        }
+    }
+    for entity in nodes.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
 }
 
 fn setup_game_over(mut state: ResMut<State<GameState>>) {
@@ -275,7 +401,10 @@ struct RoundState {
 
 const MAX_DISADVANTAGE_MS: u64 = 10000;
 
-fn start_round(mut rng: Local<Prng>, mut round: ResMut<RoundState>) {
+fn start_round(mut rng: Local<Prng>, mut round: ResMut<RoundState>, mut windows: ResMut<Windows>) {
+    for window in windows.iter_mut() {
+        window.set_cursor_visibility(false);
+    }
     if rng.rng.is_none() {
         rng.rng = Some(SmallRng::seed_from_u64(rand::random()));
     }
