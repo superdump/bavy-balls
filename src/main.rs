@@ -136,6 +136,7 @@ fn setup_level(
         .spawn_bundle(FpsCameraBundle::new(
             FpsCameraController {
                 enabled: false,
+                smoothing_weight: 0.99,
                 ..Default::default()
             },
             PerspectiveCameraBundle::default(),
