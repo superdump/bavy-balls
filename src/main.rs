@@ -58,6 +58,7 @@ fn main() {
         .add_system_set(SystemSet::on_exit(GameState::Menu).with_system(cleanup_menu))
         .add_system_set(
             SystemSet::on_enter(GameState::Playing)
+                .with_system(setup_live_scoreboard)
                 .with_system(setup_level)
                 .with_system(start_round),
         )
@@ -65,7 +66,8 @@ fn main() {
             SystemSet::on_update(GameState::Playing)
                 .with_system(follow_ball)
                 .with_system(spawn_balls)
-                .with_system(despawn_balls),
+                .with_system(despawn_balls)
+                .with_system(update_leaderboard),
         )
         .add_system_set(
             SystemSet::on_exit(GameState::Playing)
@@ -423,6 +425,177 @@ fn start_round(mut rng: Local<Prng>, mut round: ResMut<RoundState>, mut windows:
     info!("Starting the round!");
 }
 
+#[derive(Component)]
+struct Leaderboard;
+
+#[derive(Component)]
+struct LeaderboardPlayer {
+    index: usize,
+}
+
+fn setup_live_scoreboard(mut commands: Commands, font_handle: Res<FontHandle>) {
+    // ui camera
+    commands.spawn_bundle(UiCameraBundle::default());
+
+    // root node
+    commands
+        .spawn_bundle(NodeBundle {
+            style: Style {
+                size: Size::new(Val::Percent(100.0), Val::Percent(100.0)),
+                justify_content: JustifyContent::SpaceBetween,
+                ..Default::default()
+            },
+            color: Color::NONE.into(),
+            ..Default::default()
+        })
+        .with_children(|parent| {
+            // right vertical fill
+            parent
+                .spawn_bundle(NodeBundle {
+                    style: Style {
+                        flex_direction: FlexDirection::ColumnReverse,
+                        justify_content: JustifyContent::Center,
+                        size: Size::new(Val::Px(200.0), Val::Percent(100.0)),
+                        ..Default::default()
+                    },
+                    color: Color::rgba(0.5, 0.5, 0.5, 0.15).into(),
+                    ..Default::default()
+                })
+                .with_children(|parent| {
+                    // Title
+                    parent.spawn_bundle(TextBundle {
+                        style: Style {
+                            size: Size::new(Val::Undefined, Val::Px(25.)),
+                            margin: Rect {
+                                left: Val::Auto,
+                                right: Val::Auto,
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        },
+                        text: Text::with_section(
+                            "Leaderboard",
+                            TextStyle {
+                                font: font_handle.handle.clone(),
+                                font_size: 25.,
+                                color: Color::WHITE,
+                            },
+                            Default::default(),
+                        ),
+                        ..Default::default()
+                    });
+                    // List with hidden overflow
+                    parent
+                        .spawn_bundle(NodeBundle {
+                            style: Style {
+                                flex_direction: FlexDirection::ColumnReverse,
+                                align_self: AlignSelf::Center,
+                                size: Size::new(Val::Percent(100.0), Val::Percent(50.0)),
+                                overflow: Overflow::Hidden,
+                                ..Default::default()
+                            },
+                            color: Color::rgba(0.5, 0.5, 0.5, 0.10).into(),
+                            ..Default::default()
+                        })
+                        .with_children(|parent| {
+                            // Moving panel
+                            parent
+                                .spawn_bundle(NodeBundle {
+                                    style: Style {
+                                        flex_direction: FlexDirection::ColumnReverse,
+                                        flex_grow: 1.0,
+                                        max_size: Size::new(Val::Undefined, Val::Undefined),
+                                        ..Default::default()
+                                    },
+                                    color: Color::NONE.into(),
+                                    ..Default::default()
+                                })
+                                .insert(Leaderboard)
+                                .with_children(|parent| {
+                                    // List items
+                                    for i in 0..10 {
+                                        parent
+                                            .spawn_bundle(NodeBundle {
+                                                style: Style {
+                                                    justify_content: JustifyContent::FlexEnd,
+                                                    size: Size::new(
+                                                        Val::Px(200.0),
+                                                        Val::Percent(100.0),
+                                                    ),
+                                                    flex_direction: FlexDirection::Row,
+                                                    ..Default::default()
+                                                },
+                                                color: Color::NONE.into(),
+                                                ..Default::default()
+                                            })
+                                            .with_children(|parent| {
+                                                parent.spawn_bundle(TextBundle {
+                                                    style: Style {
+                                                        flex_shrink: 0.,
+                                                        size: Size::new(
+                                                            Val::Undefined,
+                                                            Val::Px(20.),
+                                                        ),
+                                                        margin: Rect {
+                                                            left: Val::Px(10.),
+                                                            right: Val::Auto,
+                                                            ..Default::default()
+                                                        },
+                                                        ..Default::default()
+                                                    },
+                                                    text: Text::with_section(
+                                                        BALL_COLOR[i].name,
+                                                        TextStyle {
+                                                            font: font_handle.handle.clone(),
+                                                            font_size: 20.,
+                                                            color: BALL_COLOR[i].color,
+                                                        },
+                                                        Default::default(),
+                                                    ),
+                                                    ..Default::default()
+                                                });
+                                                parent
+                                                    .spawn_bundle(TextBundle {
+                                                        style: Style {
+                                                            flex_shrink: 0.,
+                                                            size: Size::new(
+                                                                Val::Undefined,
+                                                                Val::Px(20.),
+                                                            ),
+                                                            margin: Rect {
+                                                                right: Val::Px(10.),
+                                                                left: Val::Auto,
+                                                                ..Default::default()
+                                                            },
+                                                            ..Default::default()
+                                                        },
+                                                        text: Text::with_section(
+                                                            BALL_COLOR[i].name,
+                                                            TextStyle {
+                                                                font: font_handle.handle.clone(),
+                                                                font_size: 20.,
+                                                                color: BALL_COLOR[i].color,
+                                                            },
+                                                            Default::default(),
+                                                        ),
+                                                        ..Default::default()
+                                                    })
+                                                    .insert(LeaderboardPlayer { index: i });
+                                            });
+                                    }
+                                });
+                        });
+                });
+        });
+}
+
+fn update_leaderboard(mut query: Query<(&LeaderboardPlayer, &mut Text)>, round: Res<RoundState>) {
+    for (player, mut text) in query.iter_mut() {
+        let distance = round.players[player.index].distance;
+        text.sections[0].value = format!("{:5.1}m", distance.abs());
+    }
+}
+
 fn spawn_balls(
     mut commands: Commands,
     meshes: ResMut<Assets<Mesh>>,
@@ -542,8 +715,8 @@ fn despawn_balls(
     for player in round.players.iter_mut() {
         if let Some(entity) = player.entity {
             if let Ok(transform) = balls.get(entity) {
+                player.distance = transform.translation.z.max(bounds.z);
                 if transform.translation.y < bounds.y || transform.translation.z <= bounds.z {
-                    player.distance = transform.translation.z.max(bounds.z);
                     player.end = Some(now);
                     let result = if transform.translation.z <= bounds.z {
                         "finished".to_string()
