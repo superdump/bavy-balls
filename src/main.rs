@@ -109,7 +109,7 @@ fn setup_level(
         radius: SPAWN_RADIUS,
         segment_length: 100.0,
         n_segments: 10,
-        seed: 4321,
+        seed: rand::random(),
         yaw_range: (-std::f32::consts::FRAC_PI_4)..std::f32::consts::FRAC_PI_4,
         pitch_range: (-std::f32::consts::FRAC_PI_4)..(-0.1 * std::f32::consts::FRAC_PI_4),
         ..Default::default()
