@@ -611,10 +611,9 @@ fn update_leaderboard(
         .map(|(i, player)| (player.distance, player.end, i))
         .collect::<Vec<_>>();
     player_order.sort_unstable_by(|a, b| {
-        a.0.partial_cmp(&b.0).unwrap().then_with(|| {
-            let old = Instant::now() - Duration::from_secs(100000);
-            a.1.unwrap_or(old).cmp(&b.1.unwrap_or(old))
-        })
+        a.0.partial_cmp(&b.0)
+            .unwrap()
+            .then_with(|| a.1.unwrap_or(round.start).cmp(&b.1.unwrap_or(round.start)))
     });
     for (player, mut text) in distances.iter_mut() {
         let list_index = player.index;
