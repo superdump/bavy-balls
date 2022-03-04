@@ -20,6 +20,7 @@ fn main() {
         width: 960.0,
         height: 540.0,
         resizable: false,
+        cursor_visible: false,
         ..Default::default()
     })
     .insert_resource(ClearColor(Color::BLACK))
