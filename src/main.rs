@@ -382,9 +382,20 @@ fn despawn_balls(
     }
 }
 
-#[derive(Default)]
 struct FollowMode {
+    following: bool,
+    index: usize,
     target: Option<Entity>,
+}
+
+impl Default for FollowMode {
+    fn default() -> Self {
+        Self {
+            following: true,
+            index: 0,
+            target: None,
+        }
+    }
 }
 
 fn follow_ball(
@@ -392,29 +403,59 @@ fn follow_ball(
     mut follow_mode: ResMut<FollowMode>,
     balls: Query<(Entity, &GlobalTransform, &RigidBodyVelocityComponent), With<Ball>>,
     mut cameras: Query<(&mut FpsCameraController, &mut LookTransform, &mut Smoother)>,
+    round: Res<RoundState>,
 ) {
     let (mut controller, mut look_transform, mut smoother) = cameras.single_mut();
-    let n_balls = balls.iter().count();
     if keyboard_input.just_pressed(KeyCode::F) {
-        follow_mode.target = match follow_mode.target {
-            Some(_) => {
-                controller.enabled = true;
-                smoother.set_lag_weight(controller.smoothing_weight);
-                None
-            }
-            None => {
-                controller.enabled = false;
-                smoother.set_lag_weight(0.99);
-                Some(balls.iter().nth(n_balls / 2).unwrap().0)
-            }
-        };
+        follow_mode.following = !follow_mode.following;
+        controller.enabled = !follow_mode.following;
+        smoother.set_lag_weight(if follow_mode.following {
+            0.99
+        } else {
+            controller.smoothing_weight
+        });
     }
-    let mut new_ball = None;
+    if !follow_mode.following {
+        return;
+    }
+    let mut updated = false;
+    if keyboard_input.just_pressed(KeyCode::Key1) {
+        follow_mode.index = 0;
+        updated = true;
+    } else if keyboard_input.just_pressed(KeyCode::Key2) {
+        follow_mode.index = 1;
+        updated = true;
+    } else if keyboard_input.just_pressed(KeyCode::Key3) {
+        follow_mode.index = 2;
+        updated = true;
+    } else if keyboard_input.just_pressed(KeyCode::Key4) {
+        follow_mode.index = 3;
+        updated = true;
+    } else if keyboard_input.just_pressed(KeyCode::Key5) {
+        follow_mode.index = 4;
+        updated = true;
+    } else if keyboard_input.just_pressed(KeyCode::Key6) {
+        follow_mode.index = 5;
+        updated = true;
+    } else if keyboard_input.just_pressed(KeyCode::Key7) {
+        follow_mode.index = 6;
+        updated = true;
+    } else if keyboard_input.just_pressed(KeyCode::Key8) {
+        follow_mode.index = 7;
+        updated = true;
+    } else if keyboard_input.just_pressed(KeyCode::Key9) {
+        follow_mode.index = 8;
+        updated = true;
+    } else if keyboard_input.just_pressed(KeyCode::Key0) {
+        follow_mode.index = 9;
+        updated = true;
+    }
+    follow_mode.target = round.players[follow_mode.index].entity;
+    if updated {
+        info!("Now following: {}", round.players[follow_mode.index].name);
+    }
     if let Some(ball) = follow_mode.target {
-        if let Some((_, transform, velocity)) = balls.get(ball).ok().or_else(|| {
-            new_ball = balls.iter().nth(n_balls / 2);
-            new_ball
-        }) {
+        if let Ok((_, transform, velocity)) = balls.get(ball) {
             let linvel = Vec3::from_slice(velocity.linvel.as_slice()).normalize_or_zero();
             let right = linvel.cross(Vec3::Y);
             let up = right.cross(linvel);
@@ -422,8 +463,5 @@ fn follow_ball(
             look_transform.target = transform.translation;
             look_transform.eye = transform.translation + offset;
         }
-    }
-    if let Some((new_ball, ..)) = new_ball {
-        follow_mode.target = Some(new_ball);
     }
 }
